@@ -19,7 +19,9 @@ cmd_setup() {
   fi
 
   # 2. Ubuntu distro
-  if proot-distro list 2>/dev/null | grep -q "^${DISTRO}.*installed"; then
+  # proot-distro install errors with "container already exists" if installed;
+  # use that as the authoritative check instead of parsing 'list' output.
+  if proot-distro login "$DISTRO" -- true 2>/dev/null; then
     log_ok "Ubuntu already installed in proot-distro."
   else
     log_info "Installing Ubuntu via proot-distro (this may take a while)..."

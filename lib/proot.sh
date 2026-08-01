@@ -93,7 +93,7 @@ _proot_run() {
 }
 
 _proot_installed() {
-  proot-distro list 2>/dev/null | grep -q "^${DISTRO}.*installed"
+  proot-distro login "$DISTRO" -- true 2>/dev/null
 }
 
 _check_nrflash() {

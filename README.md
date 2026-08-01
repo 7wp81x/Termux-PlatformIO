@@ -2,6 +2,10 @@
 
 Compile ESP32/ESP8266 PlatformIO projects on Android — no root, no desktop.
 
+![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Android%20%2F%20Termux-green.svg)
+![ESP32](https://img.shields.io/badge/chip-ESP32%20%7C%20ESP8266-orange.svg)
+
 ```
 termux shell
   └─ tpio run
@@ -10,32 +14,26 @@ termux shell
 ```
 
 PlatformIO runs inside a proot-distro Ubuntu container (full Linux ABI, no root).  
-Flashing is handled by [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP-Flasher) (`nrflash`), which talks directly to the ESP over raw USB — no serial device node required.
+Flashing is handled by [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP-Flasher) via `nrflash` — a binary that talks directly to the ESP over raw USB, no serial device node required.
 
 ---
 
 ## Screenshots
 
-<p align="center">
-  <img src="img/1.jpg" width="48%" alt="tpio setup">
-  <img src="img/2.jpg" width="48%" alt="proot Ubuntu bootstrap">
-</p>
-<p align="center">
-  <img src="img/3.jpg" width="48%" alt="tpio run compiling">
-  <img src="img/4.jpg" width="48%" alt="PlatformIO build success">
-</p>
-<p align="center">
-  <img src="img/5.jpg" width="48%" alt="nrflash flashing">
-</p>
+[![tpio setup](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/1.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/1.jpg) [![proot Ubuntu bootstrap](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/2.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/2.jpg)
+
+[![tpio run compiling](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/3.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/3.jpg) [![PlatformIO build success](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/4.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/4.jpg)
+
+[![nrflash flashing](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/5.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/5.jpg)
 
 ---
 
 ## Requirements
 
 | Tool | Install |
-|---|---|
+| ---- | ------- |
 | [Termux](https://f-droid.org/en/packages/com.termux/) | F-Droid |
-| [Termux:API](https://f-droid.org/en/packages/com.termux.api/) | F-Droid |
+| [Termux:API](https://f-droid.org/en/packages/com.termux.api/) | F-Droid (needed for USB access) |
 | [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP-Flasher) | see below |
 
 > Use the **F-Droid** versions of Termux and Termux:API — the Play Store builds are outdated.
@@ -56,7 +54,7 @@ echo 'export PATH="$HOME/nrflash:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 
 # 3. Install Termux deps
-pkg install python termux-api libusb
+pkg install python termux-api libusb proot-distro
 pip install pyusb
 
 # 4. Bootstrap proot Ubuntu + PlatformIO (one-time, ~5 min)
@@ -70,11 +68,11 @@ tpio setup
 ```bash
 # From your PlatformIO project directory (where platformio.ini lives):
 
-tpio run                        # compile + flash
-tpio run -e esp32dev            # target a specific environment
-tpio run --build-only           # compile only, skip flash
-tpio flash                      # flash last compiled .bin
-tpio flash --bin path/to/fw.bin # flash a specific binary
+tpio run                         # compile + flash
+tpio run -e esp32dev             # target a specific environment
+tpio run --build-only            # compile only, skip flash
+tpio flash                       # flash last compiled .bin
+tpio flash --bin path/to/fw.bin  # flash a specific binary
 ```
 
 ### First run
@@ -103,7 +101,7 @@ Supports:
 Offsets are read directly from PlatformIO's verbose upload output, which means they're always correct for your specific chip:
 
 | Chip | Bootloader | Partitions | App |
-|---|---|---|---|
+| ---- | ---------- | ---------- | --- |
 | ESP32, ESP32-S2 | `0x1000` | `0x8000` | `0x10000` |
 | ESP32-C3, C6, S3, H2 | `0x0` | `0x8000` | `0x10000` |
 | ESP8266 | — | — | `0x0` |
@@ -151,6 +149,8 @@ This is fixed by `--no-link2symlink` which tpio passes automatically. If you see
 
 - [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP-Flasher) — the `nrflash` binary used for flashing
 - [ESP-Bridge](https://github.com/7wp81x/ESP-Bridge) — framed USB bridge protocol for ESP32 ↔ Termux communication
+- [Termux-Serial-Monitor](https://github.com/7wp81x/Termux-Serial-Monitor) — serial monitor for ESP devices over USB in Termux
+- [NRSuite](https://github.com/7wp81x/NRSuite) — no-root wireless security toolkit for Android powered by ESP32
 
 ---
 

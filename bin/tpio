@@ -10,7 +10,10 @@
 
 set -euo pipefail
 
-TPIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve symlink so TPIO_DIR always points at the actual repo root,
+# even when tpio is symlinked into $PREFIX/bin.
+_TPIO_SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+TPIO_DIR="$(cd "$(dirname "$_TPIO_SELF")/.." && pwd)"
 LIB_DIR="$TPIO_DIR/lib"
 
 # shellcheck source=../lib/utils.sh

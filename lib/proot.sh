@@ -19,8 +19,6 @@ cmd_setup() {
   fi
 
   # 2. Ubuntu distro
-  # proot-distro install errors with "container already exists" if installed;
-  # use that as the authoritative check instead of parsing 'list' output.
   if proot-distro login "$DISTRO" -- true 2>/dev/null; then
     log_ok "Ubuntu already installed in proot-distro."
   else
@@ -76,11 +74,21 @@ proot_compile() {
   log_section "Compiling with PlatformIO (proot Ubuntu)"
   log_info "Project: $project_dir"
 
-  # Mount the project into the proot env at the same absolute path so
-  # .pio/build outputs land back in the host directory.
+  # Why PLATFORMIO_CORE_DIR is set to /root/.platformio (inside proot):
+  #
+  # proot rewrites symlinks inside extracted tarballs using a .l2s temp
+  # scheme. When the destination is a bind-mounted Termux path, the .l2s
+  # files land outside the proot rootfs and paths get mangled, causing the
+  # "would link outside destination" error during toolchain extraction.
+  #
+  # Keeping the PlatformIO package cache fully inside the proot rootfs
+  # (/root/.platformio) means all symlink rewriting stays on one filesystem
+  # that proot controls. The project dir is still bind-mounted so
+  # .pio/build outputs come back to Termux automatically.
+
   proot-distro login "$DISTRO" \
     --bind "$project_dir:$project_dir" \
-    -- bash -c "cd '$project_dir' && pio run $*"
+    -- bash -c "export PLATFORMIO_CORE_DIR=/root/.platformio && cd '$project_dir' && pio run $*"
 
   log_ok "Compile finished."
 }

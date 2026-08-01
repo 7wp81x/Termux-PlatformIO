@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# tpio — Termux PlatformIO wrapper
+# Compiles via proot-distro Ubuntu, flashes via nrflash (no root, no /dev/tty*)
+#
+# Usage: tpio run [pio run args...]
+#        tpio run -e esp32dev
+#        tpio run -e esp32dev -t upload    (compile only, skip nrflash)
+#        tpio run --flash-only             (skip compile, just flash last .bin)
+#        tpio setup                        (bootstrap proot ubuntu + pio)
+
+set -euo pipefail
+
+TPIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LIB_DIR="$TPIO_DIR/lib"
+
+# shellcheck source=../lib/utils.sh
+source "$LIB_DIR/utils.sh"
+# shellcheck source=../lib/proot.sh
+source "$LIB_DIR/proot.sh"
+# shellcheck source=../lib/flash.sh
+source "$LIB_DIR/flash.sh"
+
+#  entrypoint 
+
+CMD="${1:-}"
+
+case "$CMD" in
+  setup)
+    shift
+    cmd_setup "$@"
+    ;;
+  run)
+    shift
+    cmd_run "$@"
+    ;;
+  flash)
+    shift
+    cmd_flash "$@"
+    ;;
+  --help|-h|help|"")
+    print_help
+    ;;
+  *)
+    die "Unknown command: $CMD  (try: tpio run, tpio setup, tpio flash)"
+    ;;
+esac

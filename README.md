@@ -20,11 +20,9 @@ Flashing is handled by [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP
 
 ## Screenshots
 
-[![tpio setup](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/1.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/1.jpg) [![proot Ubuntu bootstrap](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/2.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/2.jpg)
+<img src="https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/1.jpg" width="250"> <img src="https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/2.jpg" width="250"> <img src="https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/3.jpg" width="250">
 
-[![tpio run compiling](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/3.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/3.jpg) [![PlatformIO build success](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/4.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/4.jpg)
-
-[![nrflash flashing](https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/5.jpg)](https://github.com/7wp81x/Termux-PlatformIO/blob/main/img/5.jpg)
+<img src="https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/4.jpg" width="250"> <img src="https://github.com/7wp81x/Termux-PlatformIO/raw/main/img/5.jpg" width="250">
 
 ---
 

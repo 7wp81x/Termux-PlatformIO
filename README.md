@@ -14,6 +14,22 @@ Flashing is handled by [Termux-ESP-Flasher](https://github.com/7wp81x/Termux-ESP
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="img/1.jpg" width="48%" alt="tpio setup">
+  <img src="img/2.jpg" width="48%" alt="proot Ubuntu bootstrap">
+</p>
+<p align="center">
+  <img src="img/3.jpg" width="48%" alt="tpio run compiling">
+  <img src="img/4.jpg" width="48%" alt="PlatformIO build success">
+</p>
+<p align="center">
+  <img src="img/5.jpg" width="48%" alt="nrflash flashing">
+</p>
+
+---
+
 ## Requirements
 
 | Tool | Install |
@@ -71,23 +87,28 @@ When `tpio run` triggers the USB flash step, Android will show a **USB permissio
 
 ### Compile step (`proot-distro`)
 
-`tpio run` calls `proot-distro login ubuntu` with your project directory bind-mounted at its original path. PlatformIO runs inside the Ubuntu container and writes build outputs back to `.pio/build/<env>/firmware.bin` on your Termux filesystem — no copy step needed.
+`tpio run` calls `proot-distro login ubuntu --no-link2symlink` with your project directory bind-mounted at its original path. PlatformIO runs inside the Ubuntu container and writes build outputs back to `.pio/build/<env>/` on your Termux filesystem — no copy step needed.
 
 ### Flash step (`nrflash`)
 
-After a successful build, `tpio` auto-detects the firmware binary and calls `nrflash write`. nrflash bypasses pyserial entirely, talking to the ESP's USB endpoints via a raw file descriptor (the one `termux-usb` hands out). Supports:
+After a successful build, `tpio` runs `pio run -v -t upload` inside proot with a dummy port to intercept the exact esptool command PlatformIO would use. It parses every `OFFSET FILE` pair from the `write_flash` line and passes them directly to `nrflash` — so offsets are always correct regardless of chip or partition layout.
+
+Supports:
 
 - Native USB CDC — ESP32-S3, C3, S2
 - UART bridge — ESP32, ESP8266 via CP2102, CH340, CH9102, FTDI
 
-### Offset detection
+### Flash offset detection
 
-| Binary name contains | Flashed at |
-|---|---|
-| `factory`, `merged`, `combined` | `0x0` |
-| `firmware.bin` (default pio output) | `0x10000` |
+Offsets are read directly from PlatformIO's verbose upload output, which means they're always correct for your specific chip:
 
-If your partition table uses a different app offset, use `tpio flash --bin` directly and pass the path to the correct binary.
+| Chip | Bootloader | Partitions | App |
+|---|---|---|---|
+| ESP32, ESP32-S2 | `0x1000` | `0x8000` | `0x10000` |
+| ESP32-C3, C6, S3, H2 | `0x0` | `0x8000` | `0x10000` |
+| ESP8266 | — | — | `0x0` |
+
+If PlatformIO output can't be parsed, tpio falls back to scanning the build directory and guessing offsets from the environment name.
 
 ---
 
@@ -120,6 +141,9 @@ Try `tpio flash` standalone — the compile step exits cleanly even if flash fai
 
 **Wrong environment flashed (multiple envs in platformio.ini)**  
 Pass `-e <env>` explicitly: `tpio run -e esp32dev`.
+
+**Toolchain extraction stalls with `.l2s` warnings**  
+This is fixed by `--no-link2symlink` which tpio passes automatically. If you see it anyway, make sure you're on the latest version: `git pull && bash install.sh`.
 
 ---
 

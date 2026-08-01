@@ -60,8 +60,6 @@ SH
 
 #  compile via proot 
 
-# Run pio inside proot-distro Ubuntu, mounting the current project dir.
-# $@ — args to forward to `pio run`
 proot_compile() {
   local project_dir
   project_dir="$(pwd)"
@@ -74,18 +72,14 @@ proot_compile() {
   log_section "Compiling with PlatformIO (proot Ubuntu)"
   log_info "Project: $project_dir"
 
-  # Why PLATFORMIO_CORE_DIR is set to /root/.platformio (inside proot):
-  #
-  # proot rewrites symlinks inside extracted tarballs using a .l2s temp
-  # scheme. When the destination is a bind-mounted Termux path, the .l2s
-  # files land outside the proot rootfs and paths get mangled, causing the
-  # "would link outside destination" error during toolchain extraction.
-  #
-  # Keeping the PlatformIO package cache fully inside the proot rootfs
-  # (/root/.platformio) means all symlink rewriting stays on one filesystem
-  # that proot controls. The project dir is still bind-mounted so
-  # .pio/build outputs come back to Termux automatically.
-
+  # --no-link2symlink: stop proot from using the .l2s symlink-rewriting
+  # scheme, which mangles symlink targets inside extracted tarballs when
+  # they resolve outside proot's view of the fs. Without this flag,
+  # PlatformIO toolchain extraction always hits the
+  # "would link outside destination" warning and stalls/fails.
+  # PROOT_EXTRA_ARGS is the supported way to pass raw proot flags through
+  # proot-distro without patching its scripts.
+  PROOT_EXTRA_ARGS="--no-link2symlink" \
   proot-distro login "$DISTRO" \
     --bind "$project_dir:$project_dir" \
     -- bash -c "export PLATFORMIO_CORE_DIR=/root/.platformio && cd '$project_dir' && pio run $*"
@@ -95,8 +89,8 @@ proot_compile() {
 
 #  internal helpers 
 
-# Run a command inside Ubuntu proot (no project bind-mount needed).
 _proot_run() {
+  PROOT_EXTRA_ARGS="--no-link2symlink" \
   proot-distro login "$DISTRO" -- "$@"
 }
 

@@ -51,13 +51,40 @@ print_help() {
     tpio flash              Flash the last compiled .bin (skip compile)
     tpio flash --bin <path> Flash a specific .bin file
 
+  FLASH FLAGS (tpio run / tpio flash)
+    --monitor, -m            Launch a serial monitor right after flashing
+    --monitor-cmd '<cmd>'    Monitor command to use, e.g.:
+                                --monitor-cmd 'python3 ~/bridge_monitor.py'
+                              Falls back to MONITOR_CMD in ~/.tpio_config,
+                              then bridge_monitor.py / serial_monitor.py on
+                              $PATH if neither is set.
+    -- <args>                Anything after a literal -- is passed through
+                              to the monitor command, e.g.:
+                                tpio run --monitor -- --hex-unknown
+    --fresh-offsets           Ignore the cached flash offsets for this env
+                              and re-detect them from PlatformIO
+
   EXAMPLES
     tpio setup
     tpio run
     tpio run -e esp32dev
     tpio run -e esp32dev --build-only
+    tpio run --monitor
+    tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/bridge_monitor.py'
     tpio flash
     tpio flash --bin .pio/build/esp32dev/firmware.bin
+    tpio flash --monitor -- --timestamps
+
+  FLASH OFFSET CACHING
+    Detecting flash offsets normally means booting proot-distro Ubuntu just
+    to ask PlatformIO what it would run. tpio caches the result per
+    environment at <project>/.tpio/cache/offsets-<env>.json, keyed on a
+    fingerprint of platformio.ini plus the env's board_build.partitions
+    file (if any). Unchanged on the next run → cached offsets are reused
+    and the proot boot is skipped entirely. Either file changes → offsets
+    are re-detected automatically and the cache is refreshed.
+    Add .tpio/ to your project's .gitignore. Force a re-detect any time
+    with --fresh-offsets.
 
   NOTES
     • Run from your PlatformIO project directory (where platformio.ini lives).

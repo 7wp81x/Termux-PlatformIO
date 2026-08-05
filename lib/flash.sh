@@ -7,6 +7,10 @@ cmd_run() {
   local build_only=0
   local pio_args=()
   local env=""
+  local do_monitor=0
+  local monitor_cmd_override=""
+  local fresh_offsets=0
+  local monitor_args=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -33,6 +37,24 @@ cmd_run() {
           shift 2
         fi
         ;;
+      --monitor|-m)
+        do_monitor=1
+        shift
+        ;;
+      --monitor-cmd)
+        monitor_cmd_override="$2"
+        shift 2
+        ;;
+      --fresh-offsets)
+        fresh_offsets=1
+        shift
+        ;;
+      --)
+        # Everything after a literal -- is forwarded to the monitor, not pio
+        shift
+        monitor_args=("$@")
+        break
+        ;;
       *)
         pio_args+=("$1")
         shift
@@ -47,10 +69,18 @@ cmd_run() {
     return 0
   fi
 
+  if [[ "$fresh_offsets" -eq 1 ]]; then
+    _invalidate_offset_cache "$(pwd)" "$env"
+  fi
+
   local flash_args
   flash_args="$(_extract_flash_args "$env")"
 
   _do_flash "$flash_args"
+
+  if [[ "$do_monitor" -eq 1 ]]; then
+    _launch_monitor "$monitor_cmd_override" "${monitor_args[@]+"${monitor_args[@]}"}"
+  fi
 }
 
 #  cmd_flash: flash only 
@@ -58,6 +88,10 @@ cmd_run() {
 cmd_flash() {
   local env=""
   local bin_path=""
+  local do_monitor=0
+  local monitor_cmd_override=""
+  local fresh_offsets=0
+  local monitor_args=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -69,6 +103,23 @@ cmd_flash() {
         bin_path="$2"
         shift 2
         ;;
+      --monitor|-m)
+        do_monitor=1
+        shift
+        ;;
+      --monitor-cmd)
+        monitor_cmd_override="$2"
+        shift 2
+        ;;
+      --fresh-offsets)
+        fresh_offsets=1
+        shift
+        ;;
+      --)
+        shift
+        monitor_args=("$@")
+        break
+        ;;
       *)
         shift
         ;;
@@ -78,15 +129,79 @@ cmd_flash() {
   if [[ -n "$bin_path" ]]; then
     # Manual path: just flash it at 0x10000 (user knows what they're doing)
     _do_flash "0x10000:$bin_path"
+    if [[ "$do_monitor" -eq 1 ]]; then
+      _launch_monitor "$monitor_cmd_override" "${monitor_args[@]+"${monitor_args[@]}"}"
+    fi
     return
+  fi
+
+  if [[ "$fresh_offsets" -eq 1 ]]; then
+    _invalidate_offset_cache "$(pwd)" "$env"
   fi
 
   local flash_args
   flash_args="$(_extract_flash_args "$env")"
   _do_flash "$flash_args"
+
+  if [[ "$do_monitor" -eq 1 ]]; then
+    _launch_monitor "$monitor_cmd_override" "${monitor_args[@]+"${monitor_args[@]}"}"
+  fi
 }
 
-#  extract flash args from pio -v upload dry-run 
+#  extract flash args (cached) 
+#
+# platformio.ini + the referenced partition table (if any) are fingerprinted
+# via _offset_fingerprint() (lib/offsets.sh). If neither has changed since
+# the last run for this env, the cached OFFSET:FILE pairs are reused and we
+# skip straight to nrflash — no proot-distro boot, no `pio run -v -t upload`
+# dry-run. If either changed (or there's no cache yet, or the cached build
+# files were since deleted/cleaned), we fall through to the live detection
+# below and refresh the cache with the result.
+#
+# Force a re-detect regardless of the cache with `--fresh-offsets`.
+
+_extract_flash_args() {
+  local env="${1:-}"
+  local project_dir
+  project_dir="$(pwd)"
+
+  [ -f "$project_dir/platformio.ini" ] || \
+    die "No platformio.ini found. Run from your project root."
+
+  local fingerprint cache_file cache_data cached_fingerprint cached_pairs
+  fingerprint="$(_offset_fingerprint "$project_dir" "$env")"
+  cache_file="$(_offset_cache_file "$project_dir" "$env")"
+
+  if cache_data="$(_read_offset_cache "$cache_file")"; then
+    cached_fingerprint="$(sed -n 1p <<< "$cache_data")"
+    cached_pairs="$(sed -n 2p <<< "$cache_data")"
+
+    if [[ "$cached_fingerprint" == "$fingerprint" ]] && _offset_pairs_files_exist "$cached_pairs"; then
+      log_info "platformio.ini / partition table unchanged — using cached flash offsets." >&2
+      local p
+      for p in $cached_pairs; do
+        log_info "  $p" >&2
+      done
+      echo "$cached_pairs"
+      return
+    fi
+
+    if [[ "$cached_fingerprint" != "$fingerprint" ]]; then
+      log_info "platformio.ini or partition table changed — re-detecting flash offsets." >&2
+    else
+      log_warn "Cached offsets point at build files that no longer exist — re-detecting." >&2
+    fi
+  fi
+
+  local pairs
+  pairs="$(_detect_flash_args_live "$env" "$project_dir")"
+
+  [[ -n "$pairs" ]] && _write_offset_cache "$cache_file" "$fingerprint" "$pairs"
+
+  echo "$pairs"
+}
+
+#  live detection: pio -v upload dry-run 
 #
 # Runs `pio run -v -t upload` inside proot with a fake port so esptool bails
 # immediately after printing the command — we capture the write_flash line
@@ -96,14 +211,14 @@ cmd_flash() {
 #   esptool.py ... write_flash ... 0x1000 bootloader.bin 0x8000 partitions.bin ...
 #
 # We parse every (hex_offset, file_path) pair from that line.
+#
+# This is the expensive path _extract_flash_args() above tries to avoid by
+# caching its result — it boots proot-distro Ubuntu just to ask PlatformIO
+# what it would have run.
 
-_extract_flash_args() {
+_detect_flash_args_live() {
   local env="${1:-}"
-  local project_dir
-  project_dir="$(pwd)"
-
-  [ -f "$project_dir/platformio.ini" ] || \
-    die "No platformio.ini found. Run from your project root."
+  local project_dir="${2:-$(pwd)}"
 
   log_info "Reading flash layout from PlatformIO..." >&2
 

@@ -20,6 +20,10 @@ LIB_DIR="$TPIO_DIR/lib"
 source "$LIB_DIR/utils.sh"
 # shellcheck source=../lib/proot.sh
 source "$LIB_DIR/proot.sh"
+# shellcheck source=../lib/offsets.sh
+source "$LIB_DIR/offsets.sh"
+# shellcheck source=../lib/monitor.sh
+source "$LIB_DIR/monitor.sh"
 # shellcheck source=../lib/flash.sh
 source "$LIB_DIR/flash.sh"
 

@@ -10,7 +10,8 @@ Compile ESP32/ESP8266 PlatformIO projects on Android. No root, no desktop.
 termux shell
   └─ tpio run
        ├─ proot-distro Ubuntu  →  pio run  →  firmware.bin
-       └─ nrflash              →  USB flash (no /dev/tty* needed)
+       ├─ nrflash              →  USB flash (no /dev/tty* needed)
+       └─ --monitor            →  hand off to your serial monitor
 ```
 
 PlatformIO runs inside a proot-distro Ubuntu container (full Linux ABI, no root).
@@ -60,11 +61,41 @@ tpio run -e esp32dev             # target a specific environment
 tpio run --build-only            # compile only, skip flash
 tpio flash                       # flash last compiled .bin
 tpio flash --bin path/to/fw.bin  # flash a specific binary
+
+# Flash then jump straight into a serial monitor:
+tpio run --monitor
+tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/bridge_monitor.py'
+tpio flash --monitor -- --hex-unknown --timestamps   # args after -- go to the monitor
+
+# Force a fresh flash-offset detection instead of using the cache:
+tpio run --fresh-offsets
 ```
 
 ### First run
 
 When `tpio run` hits the USB flash step, Android will show a USB permission dialog. Tap **OK**. The permission sticks until you unplug.
+
+### Flash + monitor in one go (`--monitor`)
+
+Pass `--monitor` (or `-m`) to `tpio run` or `tpio flash` and, right after a successful flash, tpio hands off to a serial monitor instead of just exiting. It doesn't ship its own monitor — it looks for one in this order:
+
+1. `--monitor-cmd '<cmd>'` passed on the command line
+2. `MONITOR_CMD="..."` set in `~/.tpio_config`
+3. `bridge_monitor.py` on your `$PATH`
+4. `serial_monitor.py` on your `$PATH`
+
+If none of those resolve to anything, tpio warns and just exits — flashing itself still succeeded.
+
+```bash
+# ~/.tpio_config
+MONITOR_CMD="python3 $HOME/bridge_monitor.py"
+```
+
+Anything after a literal `--` is forwarded straight to the monitor command, so monitor-specific flags don't need to be known to tpio itself:
+
+```bash
+tpio flash --monitor -- --hex-unknown --timestamps
+```
 
 ## How it works
 
@@ -81,7 +112,7 @@ Supports:
 - Native USB CDC: ESP32-S3, C3, S2
 - UART bridge: ESP32, ESP8266 via CP2102, CH340, CH9102, FTDI
 
-### Flash offset detection
+### Flash offset detection (cached)
 
 Offsets are read directly from PlatformIO's verbose upload output, so they're always correct for your specific chip:
 
@@ -93,6 +124,19 @@ Offsets are read directly from PlatformIO's verbose upload output, so they're al
 
 If PlatformIO output can't be parsed, tpio falls back to scanning the build directory and guessing offsets from the environment name.
 
+Detecting offsets this way means booting proot-distro Ubuntu just to ask PlatformIO what it would run — not something you want to repeat on every single flash if nothing about your board or partition layout has changed. So tpio caches the result per environment at `<project>/.tpio/cache/offsets-<env>.json`, keyed on a fingerprint of:
+
+- `platformio.ini`
+- whichever file `board_build.partitions` points at for that env, if it overrides one
+
+On the next `tpio run`/`tpio flash`:
+
+- **Fingerprint unchanged** → cached offsets are reused, the proot boot and `pio run -v -t upload` dry-run are skipped entirely.
+- **`platformio.ini` or the partition file changed** → tpio re-detects automatically and refreshes the cache.
+- **Cached offsets point at build files that no longer exist** (e.g. after `pio run -t clean`) → also re-detects, so a stale cache can't point you at a deleted `.bin`.
+
+Force a re-detect any time with `--fresh-offsets`, regardless of whether anything actually changed. Add `.tpio/` to your project's `.gitignore`.
+
 ## Config
 
 Optional config file at `~/.tpio_config` (sourced as bash):
@@ -100,9 +144,10 @@ Optional config file at `~/.tpio_config` (sourced as bash):
 ```bash
 # ~/.tpio_config
 NRFLASH_PATH=/data/data/com.termux/files/home/.local/bin/nrflash
+MONITOR_CMD="python3 $HOME/bridge_monitor.py"
 ```
 
-Useful if `nrflash` isn't on your `$PATH` after pip install.
+Useful if `nrflash` isn't on your `$PATH` after pip install, or if you want `--monitor` to always launch a specific monitor command without passing `--monitor-cmd` every time.
 
 ## Troubleshooting
 
@@ -120,6 +165,12 @@ Try `tpio flash` standalone. The compile step exits cleanly even if flash fails.
 
 **Wrong environment flashed (multiple envs in platformio.ini)**
 Pass `-e <env>` explicitly: `tpio run -e esp32dev`.
+
+**`--monitor requested but no monitor script found`**
+tpio doesn't ship a monitor itself. Either pass `--monitor-cmd '<cmd>'`, set `MONITOR_CMD` in `~/.tpio_config`, or put `bridge_monitor.py`/`serial_monitor.py` on your `$PATH`.
+
+**Flash offsets seem stale / wrong after editing platformio.ini**
+This should self-correct automatically — tpio re-detects whenever `platformio.ini` or the referenced partition file changes. If it doesn't (e.g. you edited something the fingerprint doesn't cover, like `board_build.partitions` pointing at a file outside the project), force it with `tpio run --fresh-offsets`, or just delete `.tpio/cache/` in your project.
 
 **Toolchain extraction stalls with `.l2s` warnings**
 This is fixed by `--no-link2symlink` which tpio passes automatically. If you still see it, pull the latest: `git pull && bash install.sh`.

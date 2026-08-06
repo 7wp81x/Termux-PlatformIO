@@ -11,7 +11,7 @@ termux shell
   └─ tpio run
        ├─ proot-distro Ubuntu  →  pio run  →  firmware.bin
        ├─ nrflash              →  USB flash (no /dev/tty* needed)
-       └─ --monitor            →  hand off to your serial monitor
+       └─ --monitor            →  serial_monitor.py
 ```
 
 PlatformIO runs inside a proot-distro Ubuntu container (full Linux ABI, no root).
@@ -30,8 +30,11 @@ Flashing is handled by [nrflash](https://github.com/7wp81x/Termux-ESP-Flasher), 
 | [Termux](https://f-droid.org/en/packages/com.termux/) | F-Droid |
 | [Termux:API](https://f-droid.org/en/packages/com.termux.api/) | F-Droid (needed for USB access) |
 | [nrflash](https://github.com/7wp81x/Termux-ESP-Flasher) | `pip install nrflash` |
+| `espbridge` | `pip install espbridge` (required for `--monitor`) |
 
 > Use the **F-Droid** versions of Termux and Termux:API. The Play Store builds are outdated.
+
+`bin/serial_monitor.py` is the single bundled serial monitor — a frame-aware [BridgeProtocol](https://github.com/7wp81x/ESP-Bridge) monitor that works with both native USB-CDC boards (ESP32-S3/C3) and UART bridge chips (CP2102/CH340/CH9102/FTDI). `install.sh` puts it on your `$PATH` alongside `tpio`, so `tpio run --monitor` finds it automatically with no extra configuration needed beyond `pip install espbridge`.
 
 ## Install
 
@@ -39,10 +42,10 @@ Flashing is handled by [nrflash](https://github.com/7wp81x/Termux-ESP-Flasher), 
 # 1. Clone this repo
 git clone https://github.com/7wp81x/Termux-PlatformIO
 cd Termux-PlatformIO
-bash install.sh
+bash install.sh                  # installs tpio + serial_monitor.py
 
-# 2. Install nrflash
-pip install nrflash
+# 2. Install nrflash and espbridge
+pip install nrflash espbridge
 
 # 3. Install Termux deps
 pkg install python termux-api libusb proot-distro
@@ -62,9 +65,9 @@ tpio run --build-only            # compile only, skip flash
 tpio flash                       # flash last compiled .bin
 tpio flash --bin path/to/fw.bin  # flash a specific binary
 
-# Flash then jump straight into a serial monitor:
+# Flash then jump straight into the serial monitor:
 tpio run --monitor
-tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/bridge_monitor.py'
+tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/serial_monitor.py'
 tpio flash --monitor -- --hex-unknown --timestamps   # args after -- go to the monitor
 
 # Force a fresh flash-offset detection instead of using the cache:
@@ -77,18 +80,19 @@ When `tpio run` hits the USB flash step, Android will show a USB permission dial
 
 ### Flash + monitor in one go (`--monitor`)
 
-Pass `--monitor` (or `-m`) to `tpio run` or `tpio flash` and, right after a successful flash, tpio hands off to a serial monitor instead of just exiting. It doesn't ship its own monitor — it looks for one in this order:
+Pass `--monitor` (or `-m`) to `tpio run` or `tpio flash` and, right after a successful flash, tpio hands off to `serial_monitor.py`. It's bundled in this repo and put on your `$PATH` by `install.sh`, so this works with **zero configuration** — no `MONITOR_CMD`, no `--monitor-cmd` needed, as long as you've run `pip install espbridge`.
+
+Resolution order, if you want to override:
 
 1. `--monitor-cmd '<cmd>'` passed on the command line
 2. `MONITOR_CMD="..."` set in `~/.tpio_config`
-3. `bridge_monitor.py` on your `$PATH`
-4. `serial_monitor.py` on your `$PATH`
+3. `serial_monitor.py` on your `$PATH` (bundled — this is what fires by default)
 
-If none of those resolve to anything, tpio warns and just exits — flashing itself still succeeded.
+If none of those resolve, tpio warns and exits — flashing itself still succeeded.
 
 ```bash
 # ~/.tpio_config
-MONITOR_CMD="python3 $HOME/bridge_monitor.py"
+MONITOR_CMD="python3 $HOME/serial_monitor.py"
 ```
 
 Anything after a literal `--` is forwarded straight to the monitor command, so monitor-specific flags don't need to be known to tpio itself:
@@ -144,10 +148,10 @@ Optional config file at `~/.tpio_config` (sourced as bash):
 ```bash
 # ~/.tpio_config
 NRFLASH_PATH=/data/data/com.termux/files/home/.local/bin/nrflash
-MONITOR_CMD="python3 $HOME/bridge_monitor.py"
+MONITOR_CMD="python3 $HOME/serial_monitor.py"
 ```
 
-Useful if `nrflash` isn't on your `$PATH` after pip install, or if you want `--monitor` to always launch a specific monitor command without passing `--monitor-cmd` every time.
+Useful if `nrflash` isn't on your `$PATH` after pip install, or if you want `--monitor` to always launch with a specific command without passing `--monitor-cmd` every time.
 
 ## Troubleshooting
 
@@ -166,8 +170,8 @@ Try `tpio flash` standalone. The compile step exits cleanly even if flash fails.
 **Wrong environment flashed (multiple envs in platformio.ini)**
 Pass `-e <env>` explicitly: `tpio run -e esp32dev`.
 
-**`--monitor requested but no monitor script found`**
-tpio doesn't ship a monitor itself. Either pass `--monitor-cmd '<cmd>'`, set `MONITOR_CMD` in `~/.tpio_config`, or put `bridge_monitor.py`/`serial_monitor.py` on your `$PATH`.
+**`--monitor requested but serial_monitor.py not found`**
+Re-run `bash install.sh` — it symlinks `serial_monitor.py` onto your `$PATH`. Also confirm `pip install espbridge` was run, and that your shell's `$PATH` includes wherever `install.sh` put the symlinks (`$PREFIX/bin` on Termux). You can always override with `--monitor-cmd 'python3 /path/to/serial_monitor.py'` or `MONITOR_CMD` in `~/.tpio_config`.
 
 **Flash offsets seem stale / wrong after editing platformio.ini**
 This should self-correct automatically — tpio re-detects whenever `platformio.ini` or the referenced partition file changes. If it doesn't (e.g. you edited something the fingerprint doesn't cover, like `board_build.partitions` pointing at a file outside the project), force it with `tpio run --fresh-offsets`, or just delete `.tpio/cache/` in your project.

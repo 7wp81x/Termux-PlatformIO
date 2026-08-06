@@ -54,9 +54,9 @@ print_help() {
   FLASH FLAGS (tpio run / tpio flash)
     --monitor, -m            Launch a serial monitor right after flashing
     --monitor-cmd '<cmd>'    Monitor command to use, e.g.:
-                                --monitor-cmd 'python3 ~/bridge_monitor.py'
+                                --monitor-cmd 'python3 ~/serial_monitor.py'
                               Falls back to MONITOR_CMD in ~/.tpio_config,
-                              then bridge_monitor.py / serial_monitor.py on
+                              then serial_monitor.py / serial_monitor.py on
                               $PATH if neither is set.
     -- <args>                Anything after a literal -- is passed through
                               to the monitor command, e.g.:
@@ -70,7 +70,7 @@ print_help() {
     tpio run -e esp32dev
     tpio run -e esp32dev --build-only
     tpio run --monitor
-    tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/bridge_monitor.py'
+    tpio run -e esp32c3 --monitor --monitor-cmd 'python3 ~/serial_monitor.py'
     tpio flash
     tpio flash --bin .pio/build/esp32dev/firmware.bin
     tpio flash --monitor -- --timestamps
